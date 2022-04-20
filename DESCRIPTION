@@ -1,0 +1,42 @@
+Package: MAP
+Title: Microbiome analysis package (MAP)
+Version: 0.0.1
+Date: 2022-04-20
+Authors@R: person("Julian", "Zaugg", , "j.zaugg@uq.edu.au", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-4919-1448"))
+Maintainer: Julian Zaugg <j.zaugg@uq.edu.au>
+Description: Microbiome analysis package (MAP). Collection of scripts/functions that I have either written or collected over the years. Primarily for analysing ecogenomic data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
+biocViews:
+Imports: 
+    purrr,
+    broom,
+    tidyr (>= 1.2.0),
+    dplyr (>= 1.0.8),
+    ComplexHeatmap (>= 2.10.0),
+    devtools,
+    ggplot2 (>= 3.3.5),
+    Hmisc,
+    phyloseq,
+    RColorBrewer,
+    reshape2,
+    vegan,
+    igraph,
+    treeio,
+    ape,
+    scales,
+    corrplot,
+    FSA,
+    plyr,
+    ALDEx2,
+    ggraph,
+    circlize,
+    ggnewscale,
+    colorspace,
+    svglite,
+    grid
+Depends:
+    R (>= 4.1.3)
