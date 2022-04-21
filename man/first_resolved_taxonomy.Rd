@@ -13,6 +13,6 @@ first_resolved_taxonomy(x)
 Get the lowest taxonomy level (or 'first') that has been resolved from a taxonomy string
 }
 \examples{
-first_resolved_taxonomy("d__Bacteria;p__Acidobacteriota;Unassigned)
-first_resolved_taxonomy("d__Bacteria;p__Acidobacteriota;uncultured)
+first_resolved_taxonomy("d__Bacteria;p__Acidobacteriota;Unassigned")
+first_resolved_taxonomy("d__Bacteria;p__Acidobacteriota;uncultured")
 }

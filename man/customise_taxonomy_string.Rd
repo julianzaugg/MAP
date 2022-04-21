@@ -18,5 +18,5 @@ customise_taxonomy_string(
 Customise a taxonomy string. Returns specified taxonomy levels. Assumes standard 7 ranks.
 }
 \examples{
-customise_taxonomy_string(d__Bacteria;p__Acidobacteriota, taxa_levels = c("phylum"))
+customise_taxonomy_string("d__Bacteria;p__Acidobacteriota", taxa_levels = c("phylum"))
 }

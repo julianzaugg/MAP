@@ -37,6 +37,8 @@ Imports:
     ggnewscale,
     colorspace,
     svglite,
-    grid
+    grid,
+    pacman,
+    psych
 Depends:
     R (>= 4.1.3)

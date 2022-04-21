@@ -83,66 +83,6 @@ read_counts_and_unique_features <- function(count_matrix, sample_list){
 
 
 
-#' Assign shapes to a dataframe for specified discrete columns.
-#' @param dataframe.df input dataframe
-#' @param columns columns to assign shapes
-#' @param use_shapes Boolean indicating whether to use multiple shapes (TRUE) or single shape (FALSE), e.g. 21. Default (TRUE)
-#' @param shape_pool vector of shapes indices to choose from. Default = NULL
-assign_shapes_to_df <- function(dataframe.df,
-                                columns,
-                                use_shapes = T,
-                                default_shape_type = "filled",
-                                shape_pool = NULL){
-  for (myvar in unique(columns)){
-    if (is.factor(dataframe.df[,myvar])){
-      myvar_values <- levels(dataframe.df[,myvar])
-    } else{
-      myvar_values <- factor(unique(sort(as.character(dataframe.df[,myvar]))))
-    }
-    var_shape_name <- paste0(myvar, "_shape")
-    if (use_shapes == T){ # If using shapes
-      # If no shape column for the variable, assign default pre-defined shapes
-
-
-      if (default_shape_type == "filled") {
-        if (is.null(shape_pool)){
-          shape_pool <- c(25,24,23,22,21)
-        }
-        myvar_shapes.l <- setNames(rep(shape_pool,
-                                       length(myvar_values))[1:length(myvar_values)],myvar_values)
-      } else if (default_shape_type == "hollow") {
-        if (is.null(shape_pool)){
-          shape_pool <- c(6,5,2,1,0)
-        }
-        myvar_shapes.l <- setNames(rep(shape_pool,length(myvar_values))[1:length(myvar_values)],myvar_values)
-      } else{
-        error_message <- paste0("default_shape_type should be either 'filled' or 'hollow'")
-        stop(error_message)
-      }
-    } else {
-      if (default_shape_type == "filled"){
-        myvar_shapes.l <- setNames(rep(c(21),length(myvar_values))[1:length(myvar_values)],myvar_values)
-      } else if (default_shape_type == "hollow") {
-        myvar_shapes.l <- setNames(rep(c(1),length(myvar_values))[1:length(myvar_values)],myvar_values)
-      } else{
-        error_message <- paste0("default_shape_type should be either 'filled' or 'hollow'")
-        stop(error_message)
-      }
-    }
-    all_myvar_shapes <- as.numeric(lapply(as.character(dataframe.df[,myvar]), function(x) myvar_shapes.l[x]))
-    if (!var_shape_name %in% colnames(dataframe.df)){
-      dataframe.df[,paste0(myvar,"_shape")] <- all_myvar_shapes
-    }
-  }
-  dataframe.df
-}
-
-#' Return list of shapes for variable values from metadata dataframe
-#' assumes _shape column present
-get_shape_list_from_metadata <- function(metadata.df, variable){
-  temp <- unique(metadata.df[,c(variable, paste0(variable,"_shape"))])
-  setNames(temp[,2],temp[,1])
-}
 
 
 #' Create p-value label for input value
