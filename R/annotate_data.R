@@ -108,10 +108,13 @@ assign_colours_to_df <- function(dataframe.df,
 #' @param variable column (variable) to get colours for
 colour_list_from_dataframe <- function(dataframe.df, variable){
   temp <- unique(dataframe.df[,c(variable, paste0(variable,"_colour"))])
-  setNames(temp[,2],temp[,1])
+  colours.l <- setNames(temp[,2],temp[,1])
+  if (is.null(levels(dataframe.df[,variable])) == F){
+    colours.l <- colours.l[levels(dataframe.df[,variable])]
+  }
+  colours.l <- colours.l[!is.na(names(colours.l))]
+  colours.l
 }
-
-
 
 #' Assign shapes to a dataframe for specified discrete columns.
 #' @param dataframe.df input dataframe
@@ -173,5 +176,10 @@ assign_shapes_to_df <- function(dataframe.df,
 #' @param variable column (variable) to get shapes for
 shape_list_from_dataframe <- function(dataframe.df, variable){
   temp <- unique(dataframe.df[,c(variable, paste0(variable,"_shape"))])
-  setNames(temp[,2],temp[,1])
+  shapes.l <- setNames(temp[,2],temp[,1])
+  if (is.null(levels(dataframe.df[,variable])) == F){
+    shapes.l <- shapes.l[levels(dataframe.df[,variable])]
+  }
+  shapes.l <- shapes.l[!is.na(names(shapes.l))]
+  shapes.l
 }
