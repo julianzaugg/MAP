@@ -28,6 +28,7 @@ lighten <- function(colour, factor=1.4){
 #' and returns interpolated colours.
 make_continuous_palette <- function(data.df, variables.v, annotation_palette = NULL){
 
+  # ---------------------------------------------------------------------------------
   colorRamp2 = function(breaks, colors, transparency = 0, space = "LAB") {
     # Taken from https://github.com/jokergoo/circlize/
 
@@ -107,6 +108,37 @@ make_continuous_palette <- function(data.df, variables.v, annotation_palette = N
     attributes(fun) = attr
     return(fun)
   }
+
+  # x: vector
+  # break1 single value
+  # break2 single value
+  # rgb1 vector with 3 elements
+  # rgb2 vector with 3 elements
+  .get_color = function(x, break1, break2, col1, col2, space) {
+
+    col1 = colorspace::coords(as(colorspace::sRGB(col1[1], col1[2], col1[3]), space))
+    col2 = colorspace::coords(as(colorspace::sRGB(col2[1], col2[2], col2[3]), space))
+
+    res_col = matrix(ncol = 3, nrow = length(x))
+    for(j in 1:3) {
+      xx = (x - break2)*(col2[j] - col1[j]) / (break2 - break1) + col2[j]
+      res_col[, j] = xx
+    }
+
+    res_col = get(space)(res_col)
+    res_col = colorspace::coords(as(res_col, "sRGB"))
+    res_col[, 1] = .restrict_in(res_col[,1], 0, 1)
+    res_col[, 2] = .restrict_in(res_col[,2], 0, 1)
+    res_col[, 3] = .restrict_in(res_col[,3], 0, 1)
+    hex(sRGB(res_col))
+  }
+
+  .restrict_in = function(x, lower, upper) {
+    x[x > upper] = upper
+    x[x < lower] = lower
+    x
+  }
+  # ---------------------------------------------------------------------------------
 
   # set.seed(10)
   # If annotation palette not provided, use default
