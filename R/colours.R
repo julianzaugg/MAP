@@ -22,11 +22,11 @@ lighten <- function(colour, factor=1.4){
 
 
 #' Create colour palettes for continuous variables
-#' @param data.df dataframe containing continuous variables to
+#' @param data.df dataframe containing continuous variables
 #' @param variables.v variables/columns to make continuous
 #' @return Returns a list of functions, for each variable. Functions accept a vector of numeric values
 #' and returns interpolated colours.
-make_continuous_palette <- function(data.df, variables.v){
+make_continuous_palette <- function(data.df, variables.v, annotation_palette = NULL){
 
   colorRamp2 = function(breaks, colors, transparency = 0, space = "LAB") {
     # Taken from https://github.com/jokergoo/circlize/
@@ -109,12 +109,16 @@ make_continuous_palette <- function(data.df, variables.v){
   }
 
   # set.seed(10)
-  continuous_annotation_palette <- colorRampPalette(c("#17468a","#ffdd47","#99113a"))
+  # If annotation palette not provided, use default
+  if (is.null(annotation_palette) == T){
+    annotation_palette <- colorRampPalette(c("#17468a","#ffdd47","#99113a"))
+  }
+
   palettes.l <- list()
   for (variable in variables.v){
     variable_breaks.v <- seq(min(data.df[,variable], na.rm = T), max(data.df[,variable],na.rm = T), length.out = 10)
     col_fun <- colorRamp2(breaks = variable_breaks.v,
-                          colors = continuous_annotation_palette(length(variable_breaks.v)))
+                          colors = annotation_palette(length(variable_breaks.v)))
     palettes.l[[variable]] <- col_fun
   }
   palettes.l
