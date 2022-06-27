@@ -52,6 +52,21 @@ df_column_to_rownames <- function(mydataframe, rowname_col = 1){
   return(my_clean.df)
 }
 
+#' Transfer factor levels from a dataframe to another dataframe or list.
+#' @param mydataframe input dataframe
+#' @param recieving dataframe or list receiving factor levels
+transfer_factor_levels <- function(original_dataframe, recieving){
+  for(cn in colnames(original_dataframe)) {
+    if (cn %in% names(recieving) && is.factor(original_dataframe[,cn])){
+      if (!inherits(recieving, "data.frame")){
+        recieving[[cn]] <- recieving[[cn]][levels(original_dataframe[,cn])]
+      } else if (inherits(recieving, "data.frame")){
+        recieving[,cn] <- factor(recieving[,cn], levels = levels(original_dataframe[,cn]))
+      }
+    }
+  }
+  recieving
+}
 
 #' The geometric mean, with some error-protection bits.
 gm_mean <- function(x, na.rm=TRUE){
