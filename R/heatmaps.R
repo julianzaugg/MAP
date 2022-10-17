@@ -1,3 +1,478 @@
+plot_heatmap_v2 <- function(input_matrix.m,
+                                   column_annotation_data.df = NULL,
+                                   row_annotation_data.df = NULL,
+
+                                   column_discrete_variables_to_plot.v = NULL,
+                                   column_continuous_variables_to_plot.v = NULL,
+                                   row_discrete_variables_to_plot.v = NULL,
+                                   row_continuous_variables_to_plot.v = NULL,
+
+                                   column_continuous_variable_breaks.l = NULL,
+                                   row_continuous_variable_breaks.l = NULL,
+
+                                   output_filename = NULL,
+                                   height = 10, width = 10,
+                                   row_title = "Gene",
+                                   column_title = "Sample",
+                                   heatmap_palette_choice = 1,
+
+                                   annotation_name_size = 4,
+                                   annotation_legend_label_size = 7,
+                                   annotation_legend_title_size = 8,
+                                   annotation_legend_length = 2,
+                                   annotation_legend_height = 3,
+
+                                   column_split_variable = NULL,
+                                   column_label_variable = NULL,
+                                   column_labels.df = NULL,
+
+                                   row_split_variable = NULL,
+                                   row_label_variable = NULL,
+                                   row_labels.df = NULL,
+
+                                   column_title_font_size = 7,
+                                   column_labels_font_size = 6,
+                                   row_title_font_size = 7,
+                                   row_labels_font_size = 6,
+
+                                   column_annotation_padding = 0.2,
+                                   row_annotation_padding = 0.2,
+
+                                   cluster_rows = T,
+                                   cluster_columns = T,
+                                   show_row_dend = T,
+                                   show_column_dend = T,
+
+                                   heatmap_legend_padding = 2,
+                                   plot_padding = c(1,1,1,1),# bottom, left, top and right
+
+                                   main_legend_title = NULL,
+
+                                   order_heatmap_columns_by_labels = F, # Order the heatmap rows by the column labels
+                                   order_heatmap_rows_by_labels = F, # Order the heatmap rows by the row labels
+                                   show_cell_values = F,
+                                   # If show_cell_values =T, cells less than this will have a black font colour
+                                   # and above white
+                                   cell_fun_value_col_threshold = 15,
+                                   my_cell_fun = NULL # function to apply to the cell values
+){
+  # if (!is.null(taxa_data.df)){
+  #   # Filter taxa_data.df to entries in input_matrix.m.
+  #   # Requires first column to be rowname
+  #   taxa_data.df %>% dplyr::filter(cur_data()[[1]] %in% rownames(input_matrix.m))
+  #
+  #   # Ensure order of taxa_data.df matches input matrix.
+  #   taxa_data.df <- taxa_data.df %>% dplyr::arrange(factor(cur_data()[[1]], levels = rownames(input_matrix.m)))
+  #
+  # }
+  # Create row and column labels
+  get_row_labels <- function(x, labeller_function){
+    data.frame(rownames(x), unlist(lapply(rownames(x), labeller_function)))
+  }
+  # column_labels.df <- metadata.df[,c("Index", "Sample_name")]
+
+  # ---------------------------------------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------------------------------------
+  # Create colour palettes
+
+  # Choice of heatmap palette
+  if (heatmap_palette_choice == 1){
+    colours.v <- c("white", rev(viridis(8)))
+  } else if (heatmap_palette_choice == 2){
+    colours.v <- c("white", rev(magma(8)))
+  } else if (heatmap_palette_choice == 3){
+    colours.v <-  rev(cividis(8))
+    colours.v <- c(colours.v[1:4], "white", colours.v[5:8])
+  } else{
+    error_message <- paste0("Abundance palette choice ", heatmap_palette_choice,
+                            "is invalid. Choose from '1','2' or '3'.")
+    stop(error_message)
+  }
+
+  abundance_palette <- colorRampPalette(colours.v)
+  # TODO dynamic breaks and/or user provided
+  abundance_breaks.v <- unlist(lapply(c(0.0001, 0.1, 0.5,5, seq(10,40,10)),log,2))
+  # abundance_breaks.v <- unlist(c(0, 0.1, 0.5,5, seq(10,20,10)))
+  abundance_col_fun <- circlize::colorRamp2(breaks = abundance_breaks.v, colors = abundance_palette(length(abundance_breaks.v)))
+
+  # ---------------------------------------------------------------------------------------------------------
+  # Create continuous variable palettes. Only for those variables that have defined breaks.
+  # TODO Add ability to provide colours, currently random
+  # TODO Reduce duplicate code
+  column_continuous_variables_palettes.l <- list()
+  for (variable in column_continuous_variables_to_plot.v){
+    if (variable %in% names(column_continuous_variable_breaks.l)){
+      column_continuous_variables_palettes.l[[variable]] <- make_continuous_palette(column_annotation_data.df, variable,
+                                                                                    annotation_palette = colorRampPalette(c("white", circlize::rand_color(1))),
+                                                                                    custom_breaks.v = column_continuous_variable_breaks.l[[variable]])
+    }
+  }
+  row_continuous_variables_palettes.l <- list()
+  for (variable in row_continuous_variables_to_plot.v){
+    if (variable %in% names(row_continuous_variable_breaks.l)){
+      row_continuous_variables_palettes.l[[variable]] <- make_continuous_palette(row_annotation_data.df, variable,
+                                                                                 annotation_palette = colorRampPalette(c("white", circlize::rand_color(1))),
+                                                                                 custom_breaks.v = row_continuous_variable_breaks.l[[variable]])
+    }
+  }
+  # ---------------------------------------------------------------------------------------------------------
+  # Create colour palettes for discrete variables
+  # TODO Reduce duplicate code
+  column_discrete_variables_palettes.l <- list()
+  for (variable in column_discrete_variables_to_plot.v){
+    if (paste0(variable, "_colour") %in% colnames(column_annotation_data.df)){
+      column_discrete_variables_palettes.l[[variable]] <- colour_list_from_dataframe(column_annotation_data.df, variable)
+    }
+  }
+  row_discrete_variables_palettes.l <- list()
+  for (variable in row_discrete_variables_to_plot.v){
+    if (paste0(variable, "_colour") %in% colnames(row_annotation_data.df)){
+      row_discrete_variables_palettes.l[[variable]] <- colour_list_from_dataframe(row_annotation_data.df, variable)
+    }
+  }
+
+  # ---------------------------------------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------------------------------------
+  # Create annotations for variables
+  column_annotation <- NULL
+  row_annotation <- NULL
+
+  # Create annotation for column variables
+  all_column_variables.v <- c(column_discrete_variables_to_plot.v, column_continuous_variables_to_plot.v)
+  if (length(all_column_variables.v) > 0){
+    all_column_variables.v <- all_column_variables.v[all_column_variables.v %in% colnames(column_annotation_data.df)]
+
+    # Filter column annotation data to those entries present in the heatmap matrix
+    # Assumes rownames defined
+    column_annotation_data.df <- column_annotation_data.df[rownames(column_annotation_data.df) %in% colnames(input_matrix.m),,drop =F]
+
+    # Order/filter the heatmap matrix to order/entries of metadata
+    input_matrix.m <- input_matrix.m[,rownames(column_annotation_data.df),drop = F]
+
+    # Order the heatmap matrix by the variables
+    input_matrix.m <- input_matrix.m[,do.call(order, column_annotation_data.df[,all_column_variables.v,drop=F]),drop =F]
+
+    # Order the column_annotation_data.df by the variables
+    column_annotation_data.df <- column_annotation_data.df[do.call(order, column_annotation_data.df[,all_column_variables.v,drop=F]),,drop=F]
+
+    # Check that rownames match colnames
+    if (!all(rownames(column_annotation_data.df) == colnames(input_matrix.m))){
+      stop("Row names in column annotation data do not match column names in matrix")
+    }
+
+    # Create final annotation dataframe from the column annotation data
+    annotation_data.df <- column_annotation_data.df[,all_column_variables.v,drop = F]
+
+    if (length(column_continuous_variables_to_plot.v) > 0){
+      # Remove variables/columns that are all zero/NA
+      annotation_data.df <-
+        annotation_data.df %>%
+        dplyr::select(-names(which(apply(annotation_data.df[,column_continuous_variables_to_plot.v,drop =F], 2, sum, na.rm = T) == 0)))
+      column_continuous_variables_to_plot.v <- column_continuous_variables_to_plot.v[column_continuous_variables_to_plot.v %in% names(annotation_data.df)]
+    }
+
+    # Build the annotation_legend_param list for each variable
+    annotation_legend_param.l <- list()
+    for (variable in names(annotation_data.df)){
+      if (variable %in% names(column_continuous_variable_breaks.l)){
+
+        annotation_legend_param.l[[variable]] <-
+          list(direction = "horizontal",border =T,
+               labels_gp = gpar(fontsize = annotation_legend_label_size),
+               # labels_rot = 45,
+               title_gp = gpar(fontsize = annotation_legend_title_size, fontface = "bold"),
+               legend_width = unit(annotation_legend_length,"cm"),
+               legend_height = unit(annotation_legend_height,"cm"),
+               at = column_continuous_variable_breaks.l[[variable]])
+      } else{
+        annotation_legend_param.l[[variable]] <-
+          list(direction = "horizontal", border =T,
+               labels_gp = gpar(fontsize = annotation_legend_label_size),
+               # labels_rot = 45,
+               title_gp = gpar(fontsize = annotation_legend_title_size, fontface = "bold"),
+               legend_width = unit(annotation_legend_length,"cm"),
+               legend_height = unit(annotation_legend_height,"cm")
+          )
+      }
+    }
+
+    column_annotation <-
+      HeatmapAnnotation(
+        df = annotation_data.df,
+        col = column_discrete_variables_palettes.l,
+        # Uncomment to provide palettes for both discrete and continuous variables
+        # col = c(column_discrete_variables_palettes.l,
+        #         column_continuous_variables_palettes.l
+        # ),
+        gap = unit(.1,"cm"),
+        gp = gpar(col = "grey30", lwd = .1),
+        border = T,
+        simple_anno_size = unit(.3, "cm"),
+        annotation_name_gp = gpar(fontsize = annotation_name_size),
+        annotation_legend_param = annotation_legend_param.l,
+        na_col = "grey",
+        which = "column"
+        # show_legend = F
+      )
+  }
+  # ---------------------------------------------------------------------------------------------------------
+  # Create annotation for row variables
+  all_row_variables.v <- c(row_discrete_variables_to_plot.v, row_continuous_variables_to_plot.v)
+  if (length(all_row_variables.v) > 0){
+    all_row_variables.v <- all_row_variables.v[all_row_variables.v %in% colnames(row_annotation_data.df)]
+
+    # Filter row annotation data to those entries present in the heatmap matrix
+    # Assumes rownames defined
+    row_annotation_data.df <- row_annotation_data.df[rownames(row_annotation_data.df) %in% rownames(input_matrix.m),,drop =F]
+
+    # Order/filter the heatmap matrix to order/entries of metadata
+    input_matrix.m <- input_matrix.m[rownames(row_annotation_data.df),,drop = F]
+
+    # Order the heatmap matrix by the variables
+    input_matrix.m <- input_matrix.m[do.call(order, row_annotation_data.df[,all_row_variables.v,drop=F]),,drop =F]
+
+    # Order the row_annotation_data.df by the variables
+    row_annotation_data.df <- row_annotation_data.df[do.call(order, row_annotation_data.df[,all_row_variables.v,drop=F]),,drop=F]
+
+    # Check that rownames match colnames
+    if (!all(rownames(row_annotation_data.df) == rownames(input_matrix.m))){
+      stop("Row names in row annotation data do not match row names in matrix")
+    }
+
+    # Create final annotation dataframe from the row annotation data
+    annotation_data.df <- row_annotation_data.df[,all_row_variables.v,drop = F]
+
+    if (length(row_continuous_variables_to_plot.v) > 0){
+      # Remove variables/rows that are all zero/NA
+      annotation_data.df <-
+        annotation_data.df %>%
+        dplyr::select(-names(which(apply(annotation_data.df[,row_continuous_variables_to_plot.v,drop =F], 2, sum, na.rm = T) == 0)))
+      row_continuous_variables_to_plot.v <- row_continuous_variables_to_plot.v[row_continuous_variables_to_plot.v %in% names(annotation_data.df)]
+    }
+
+    # Build the annotation_legend_param list for each variable
+    annotation_legend_param.l <- list()
+    for (variable in names(annotation_data.df)){
+      if (variable %in% names(row_continuous_variable_breaks.l)){
+
+        annotation_legend_param.l[[variable]] <-
+          list(direction = "horizontal",border =T,
+               labels_gp = gpar(fontsize = annotation_legend_label_size),
+               # labels_rot = 45,
+               title_gp = gpar(fontsize = annotation_legend_title_size, fontface = "bold"),
+               legend_width = unit(annotation_legend_length,"cm"),
+               legend_height = unit(annotation_legend_height,"cm"),
+               at = row_continuous_variable_breaks.l[[variable]])
+      } else{
+        annotation_legend_param.l[[variable]] <-
+          list(direction = "horizontal", border =T,
+               labels_gp = gpar(fontsize = annotation_legend_label_size),
+               # labels_rot = 45,
+               title_gp = gpar(fontsize = annotation_legend_title_size, fontface = "bold"),
+               legend_width = unit(annotation_legend_length,"cm"),
+               legend_height = unit(annotation_legend_height,"cm")
+          )
+      }
+    }
+
+    row_annotation <-
+      HeatmapAnnotation(
+        df = annotation_data.df,
+        col = row_discrete_variables_palettes.l,
+        # Uncomment to provide palettes for both discrete and continuous variables
+        # col = c(row_discrete_variables_palettes.l,
+        #         row_continuous_variables_palettes.l
+        # ),
+        gap = unit(.1,"cm"),
+        gp = gpar(col = "grey30", lwd = .1),
+        border = T,
+        simple_anno_size = unit(.3, "cm"),
+        annotation_name_gp = gpar(fontsize = annotation_name_size),
+        annotation_legend_param = annotation_legend_param.l,
+        na_col = "grey",
+        which = "row"
+        # show_legend = F
+      )
+  }
+
+  # if (!is.null(taxa_data.df)){
+  #
+  #   row_annotation <- HeatmapAnnotation(
+  #     # Phylum = anno_block(gp = gpar(fill = 1:1000),
+  #     # labels = c("Oct-19", "Jun-20", "Nov-20", "Jul-21"),
+  #     # labels_gp = gpar(col = "black", fontsize = 10)),
+  #     df = taxa_data.df %>% dplyr::select(-1,-2) %>% as.data.frame(),
+  #     gap = unit(.1,"cm"),
+  #     gp = gpar(col = "grey30", lwd = .1),
+  #     show_annotation_name = F,
+  #     annotation_legend_param = list(border = "black"),
+  #     border = T,
+  #     name = "Phylum",
+  #     which = "row")
+  # }
+
+
+  # ----------------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------------
+  # Create legends
+  if (is.null(main_legend_title)){
+    main_legend_title <- expression(bold(log[2]~"(Relative abundance%)"))
+  }
+
+  abundance_legend <- Legend(
+    # TODO Dynamic breaks/labels
+    labels = rev(c(c(0, 0.1, 0.5,5, seq(10,30,10)), ">= 40")),
+    at = abundance_breaks.v,
+    labels_gp = gpar(fontsize = 10),
+    legend_gp = gpar(fill = rev(abundance_col_fun(abundance_breaks.v))), # For discrete
+    title_position = "leftcenter-rot",
+    # title_position = "topcenter",
+    # title_position = "topcenter",
+    title_gp = gpar(fontsize = 10,fontface = "bold"),
+    title = main_legend_title,
+    # title = expression(bold(log[2]~"(Estimated gene abundance in community)")),
+    direction = "vertical",
+    border = "black",
+    # nrow = 1,
+    #labels_rot = 45,
+    # col_fun = col_fun
+  )
+
+  # ----------------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------------
+  # Create main heatmap
+
+  # Set global heatmap parameters
+  ht_opt$HEATMAP_LEGEND_PADDING <- unit(heatmap_legend_padding,"cm")
+  ht_opt$COLUMN_ANNO_PADDING <- unit(column_annotation_padding,"cm")
+  ht_opt$ROW_ANNO_PADDING <- unit(row_annotation_padding,"cm")
+  ht_opt$legend_gap <- unit(c(1,1),"cm")
+
+  if (!is.null(column_split_variable) & !is.null(column_annotation_data.df)){
+    column_split_values.v <- column_annotation_data.df[colnames(input_matrix.m), column_split_variable]
+  } else{
+    column_split_values.v <- NULL
+  }
+
+  if (!is.null(row_split_variable) & !is.null(row_annotation_data.df)){
+    row_split_values.v <- row_annotation_data.df[,row_split_variable]
+  } else{
+    row_split_values.v <- NULL
+  }
+
+  if (!is.null(column_label_variable)){
+    column_label_values.v <- column_annotation_data.df[colnames(input_matrix.m), column_label_variable]
+  } else{
+    column_label_values.v <- colnames(input_matrix.m)
+  }
+  if (!is.null(column_labels.df)){
+    column_label_values.v <- as.character(lapply(col_labels.v, function(x) as.character(column_labels.df[column_labels.df[,1] == x,][,2])))
+  }
+
+  if (!is.null(row_label_variable)){
+    row_label_values.v <- row_annotation_data.df[,row_label_variable]
+  } else{
+    row_label_values.v <- rownames(input_matrix.m)
+  }
+
+  if (!is.null(row_labels.df)){
+    row_label_values.v <- as.character(lapply(row_label_values.v, function(x) as.character(row_labels.df[row_labels.df[,1] == x,][,2])))
+  }
+
+  # TODO FIXME
+  # if (order_heatmap_columns_by_labels == T){
+  #   # Order the heatmap rows by the column labels names
+  #   input_matrix.m <- input_matrix.m[,order(column_label_values.v),drop =F]
+  #   column_label_values.v <- column_label_values.v[order(column_label_values.v)]
+  #   column_split_values.v <- column_split_values.v[order(column_label_values.v)]
+  # }
+  #
+  # if (order_heatmap_rows_by_labels == T){
+  #   # Order the heatmap rows by the row labels names
+  #   input_matrix.m <- input_matrix.m[order(row_label_values.v),,drop =F]
+  #   row_label_values.v <- row_label_values.v[order(row_label_values.v)]
+  #   row_split_values.v <- row_split_values.v[order(row_label_values.v)]
+  # }
+
+  # if show values and no function provided
+  if (show_cell_values == T & is.null(my_cell_fun)){
+    my_cell_fun <- function(j, i, x, y, width, height, fill) {
+      # if(input_matrix.m[i, j] < cell_fun_value_col_threshold & input_matrix.m[i, j] != 0){
+      if(input_matrix.m[i, j] < cell_fun_value_col_threshold){
+        grid.text(sprintf("%.2f", input_matrix.m[i, j]), x, y, gp = gpar(fontsize = 6, col = "black"))}
+      else if(input_matrix.m[i, j] >= cell_fun_value_col_threshold ) {
+        grid.text(sprintf("%.2f", input_matrix.m[i, j]), x, y, gp = gpar(fontsize = 6, col = "white"))
+      }
+    }
+  }
+
+
+  hm = Heatmap(input_matrix.m,
+               name = "abundance",
+
+               show_heatmap_legend = F,
+               top_annotation = column_annotation,
+               left_annotation = row_annotation,
+               cluster_rows = cluster_rows,
+               cluster_columns = cluster_columns,
+
+               # Colours
+               col = abundance_col_fun,
+               na_col = "grey",
+
+               border_gp = gpar(lwd = 1, col = "black"),
+               rect_gp = gpar(lwd = .2, col = "grey10"),
+
+               # ------------------------------------------
+               # Columns
+               column_title = column_title,
+               column_title_side = "bottom",
+               column_title_gp = gpar(fontsize = column_title_font_size, fontface = "bold"),
+               # Split columns. IF FACTOR, levels are used to determine order
+               column_split = column_split_values.v,
+               column_labels = column_label_values.v,
+               column_names_side = "bottom",
+               column_names_gp = gpar(fontsize = column_labels_font_size),
+               column_names_rot = 45,
+               column_gap = unit(.2,"cm"),
+               show_column_dend = show_column_dend,
+               # ------------------------------------------
+               # Rows
+               row_title = row_title,
+               row_title_side = "left",
+               row_title_gp = gpar(fontsize = row_title_font_size, fontface = "bold"),
+               # Split columns. IF FACTOR, levels are used to determine order
+               row_split = row_split_values.v,
+               row_labels = row_label_values.v,
+               row_names_side = "right",
+               row_names_gp = gpar(fontsize = row_labels_font_size),
+               row_names_rot = 0,
+               row_gap = unit(.2,"cm"),
+               show_row_dend = show_row_dend,
+               cell_fun = my_cell_fun
+  )
+
+  hm_list = hm
+  if (!is.null(output_filename)){
+    pdf(output_filename,height=height,width=width)
+    padding <- unit(plot_padding, "cm")
+    draw(hm_list,
+         # main_heatmap = "rpkm",
+         # legend_grouping = "original",
+         # annotation_legend_list = c(abundance_legend),
+         # show_annotation_legend = F,
+         heatmap_legend_list = c(abundance_legend),
+         merge_legend = F,
+         ht_gap = unit(.5, "cm"),
+         padding = padding,
+         annotation_legend_side = "bottom",
+         heatmap_legend_side = "right"
+    )
+    dev.off()
+  }
+  return(list("heatmap" = hm, "legend" = abundance_legend))
+}
+
 
 # Function to create heatmap
 make_heatmap <- function(heatmap.m,
