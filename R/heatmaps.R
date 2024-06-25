@@ -1,4 +1,4 @@
-plot_heatmap_v2 <- function(input_matrix.m,
+make_heatmap_v2 <- function(input_matrix.m,
                             data_type = "relative_abundance", # either "relative_abundance", "RPKM", "copy_number" or "custom"
                             column_annotation_data.df = NULL,
                             row_annotation_data.df = NULL,
