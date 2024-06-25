@@ -1,3 +1,85 @@
+#' Calculates the prevalence, abundance and number of samples detected
+#' from community matrix
+#' @abundances.m matrix of abundance values, rows should be features/taxa
+calculate_prevalence_abundunce_detection <- function(abundances.m){
+
+  m2df <- function(mymatrix, column_name = "Row_variable"){
+    mydf <- as.data.frame(mymatrix)
+    cur_names <- names(mydf)
+    mydf[, column_name] <- rownames(mydf)
+    rownames(mydf) <- NULL
+    mydf <- mydf[,c(column_name,cur_names)]
+    return(mydf)
+  }
+
+  m2df(abundances.m, "Feature") %>%
+    pivot_longer(cols = -1, names_to = "Sample", values_to = "Relative_abundance") %>%
+    dplyr::mutate(Samples_total = n_distinct(Sample)) %>% # number of unique samples/index
+    dplyr::group_by_at(1,.drop = F) %>%
+    dplyr::mutate(In_N_samples = sum(Relative_abundance > 0, na.rm = TRUE)) %>%
+    dplyr::summarise(
+      In_N_samples = max(In_N_samples),
+      Samples_total = max(Samples_total),
+      Prevalence = round(In_N_samples/Samples_total*100, 3),
+      # Mean_relative_abundance2 = round(mean(sum(Relative_abundance)/max(Samples_total)), 5),
+      Min_relative_abundance = round(min(Relative_abundance),3),
+      Max_relative_abundance = round(max(Relative_abundance),3),
+      Mean_relative_abundance = round(mean(Relative_abundance), 3),
+      Median_relative_abundance = round(median(Relative_abundance), 3)
+    ) %>%
+    as.data.frame()
+}
+
+#' Filter a taxa matrix by abundance, detection and/or prevalence.
+#' Assumes rows are taxa/species
+#' @param taxa.m Matrix with taxa/species as rows
+#' @param minimum_abundance minimum abundance for row
+#' @param minimum_detection minimum number of samples for the taxa to be observed in
+#' @param minimum_prevalence minimum prevalence of the taxa across all the samples
+#' @param inverse (optional) If True, invert the results, i.e. minimum becomes the maximum
+filter_taxa_matrix <- function(taxa.m, minimum_abundance = 0, minimum_detection = 0, minimum_prevalence = 0, inverse = F){
+  if (dim(taxa.m)[2] == 1){
+    message("Only one sample in input data, changing minimum_detection to = 1")
+    minimum_detection <- 1
+  }
+  pa.m <- taxa.m
+  pa.m[taxa.m > 0] <- 1
+  abundance.m <- round(as.matrix(apply(taxa.m, 1, max)), digits = 3)
+  detected.m <- as.matrix(apply(pa.m, 1, sum))
+  prevalence.m <- round(as.matrix(apply(taxa.m, 1,function(x) {length(which(x > 0)) / length(x)}))* 100, 3)
+
+  colnames(abundance.m) <- "Max_relative_abundance"
+  colnames(detected.m) <- "In_N_samples"
+  colnames(prevalence.m) <- "Prevalence"
+
+  m2df <- function(mymatrix, column_name = "Row_variable"){
+    mydf <- as.data.frame(mymatrix)
+    cur_names <- names(mydf)
+    mydf[, column_name] <- rownames(mydf)
+    rownames(mydf) <- NULL
+    mydf <- mydf[,c(column_name,cur_names)]
+    return(mydf)
+  }
+  full_table.df <- m2df(do.call(cbind, list(abundance.m, detected.m, prevalence.m)), "Feature")
+
+  if (inverse == T){
+    abundance_members.v <- rownames(abundance.m)[which(abundance.m < minimum_abundance)]
+    detect_members.v <- rownames(detected.m)[which(detected.m < minimum_detection)]
+    prevalence_members.v <- rownames(prevalence.m)[which(prevalence.m < minimum_prevalence)]
+  } else{
+    abundance_members.v <-  rownames(abundance.m)[which(abundance.m >= minimum_abundance)]
+    detect_members.v <- rownames(detected.m)[which(detected.m >= minimum_detection)]
+    prevalence_members.v <- rownames(prevalence.m)[which(prevalence.m >= minimum_prevalence)]
+  }
+
+  filtered_members.v <- Reduce(base::intersect, list(abundance_members.v, detect_members.v,prevalence_members.v))
+  list("filtered_data.m" = taxa.m[filtered_members.v,,drop =F],
+       "max_abundance.m" = abundance.m,
+       "detected.m" = detected.m,
+       "prevalence.m" = prevalence.m,
+       "summary.df" = full_table.df
+  )
+}
 
 #' Convert a dataframe to a matrix. First column becomes row names
 #' @param mydataframe input dataframe
@@ -253,6 +335,57 @@ generate_tax_level_data <- function(feature_count_taxonomy_data.df, sample_ids, 
     output[[tax_string_level]] <- list("counts" = counts.m, "abundances" = abundances.m)
   }
   output
+}
+
+#' Calculate the top N taxa across samples in provided abundance dataframe and collapse to those taxa.
+#' Remaining taxa are classified as "Other".
+#' Input should be a dataframe with first column as the taxonomy ID, and remaining
+#' columns the abundance per sample
+calculate_top_n_taxa_and_collapse <- function(abundance.df, top_n = 10, minimum_abundance = 0){
+  warning("Ensure abundances are percentages, not fractions!")
+
+  top_taxa_abundances.df <-
+    abundance.df %>%
+    tidyr::pivot_longer(., cols = -1, names_to = "Sample", values_to = "Relative_abundance") %>%
+    dplyr::group_by_at(1,.drop = F) %>%
+    dplyr::group_by(Sample) %>%
+    dplyr::slice_max(.,order_by = Relative_abundance, n = top_n) %>%
+    dplyr::filter(Relative_abundance > minimum_abundance)
+  top_taxa.v <- top_taxa_abundances.df %>% pull(1) %>% unique()
+
+  tax_column <- colnames(abundance.df)[[1]]
+  add_summary_rows <- function(.data, ...) {
+    dplyr::group_modify(.data, function(x, y) dplyr::bind_rows(x, dplyr::summarise(x, ...)))
+  }
+  abundance.df %>%
+    dplyr::filter(if_any(1, ~. %in% top_taxa.v)) %>%
+    tidyr::pivot_longer(., cols = -1, names_to = "Sample", values_to = "Relative_abundance") %>%
+    dplyr::filter(Relative_abundance > 0.0) %>%
+    dplyr::group_by(Sample) %>%
+    add_summary_rows({{tax_column}} := "Other", Relative_abundance = 100 - sum(Relative_abundance)) %>%
+    # dplyr::group_modify(~dplyr::add_row(Relative_abundance = 100 - sum(.x$Relative_abundance),taxonomy_phylum == "Other",.x)) %>%
+    dplyr::mutate(Relative_abundance = round(ifelse(Relative_abundance < 0.0000001, 0, Relative_abundance),4)) %>%
+    as.data.frame()
+}
+
+#' Input should be a dataframe with first column as the taxonomy ID, and remaining
+#' columns the abundance/count per sample
+collapse_to_taxa <- function(mydata.df, taxa_to_keep){
+  warning("Ensure abundances are percentages, not fractions!")
+
+  tax_column <- colnames(mydata.df)[[1]]
+  add_summary_rows <- function(.data, ...) {
+    dplyr::group_modify(.data, function(x, y) dplyr::bind_rows(x, dplyr::summarise(x, ...)))
+  }
+  mydata.df %>%
+    dplyr::filter(if_any(1, ~. %in% taxa_to_keep)) %>%
+    tidyr::pivot_longer(., cols = -1, names_to = "Sample", values_to = "Relative_abundance") %>%
+    dplyr::filter(Relative_abundance > 0.0) %>%
+    dplyr::group_by(Sample) %>%
+    add_summary_rows({{tax_column}} := "Other", Relative_abundance = 100 - sum(Relative_abundance)) %>%
+    # dplyr::group_modify(~dplyr::add_row(Relative_abundance = 100 - sum(.x$Relative_abundance),taxonomy_phylum == "Other",.x)) %>%
+    dplyr::mutate(Relative_abundance = round(ifelse(Relative_abundance < 0.0000001, 0, Relative_abundance),4)) %>%
+    as.data.frame()
 }
 
 abundance_summary <- function(abundance.df, top_n = NULL){

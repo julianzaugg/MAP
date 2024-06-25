@@ -26,7 +26,7 @@ lighten <- function(colour, factor=1.4){
 #' @param variables.v variables/columns to make continuous
 #' @return Returns a list of functions, for each variable. Functions accept a vector of numeric values
 #' and returns interpolated colours.
-make_continuous_palette <- function(data.df, variables.v, annotation_palette = NULL){
+make_continuous_palette <- function(data.df, variables.v, annotation_palette = NULL, custom_breaks.v = NULL){
 
   # ---------------------------------------------------------------------------------
   colorRamp2 = function(breaks, colors, transparency = 0, space = "LAB") {
@@ -148,10 +148,20 @@ make_continuous_palette <- function(data.df, variables.v, annotation_palette = N
 
   palettes.l <- list()
   for (variable in variables.v){
-    variable_breaks.v <- seq(min(data.df[,variable], na.rm = T), max(data.df[,variable],na.rm = T), length.out = 10)
-    col_fun <- colorRamp2(breaks = variable_breaks.v,
-                          colors = annotation_palette(length(variable_breaks.v)))
-    palettes.l[[variable]] <- col_fun
+    if (is.null(custom_breaks.v)){
+      variable_breaks.v <- seq(min(data.df[,variable], na.rm = T), max(data.df[,variable],na.rm = T), length.out = 10)
+    } else{
+      variable_breaks.v <- custom_breaks.v
+    }
+    if (length(unique(variable_breaks.v)) == 1) {
+      warning(paste0("Cannot assign colours to variable: ", variable, " as there is only one unique value. Skipping."))
+    } else{
+      col_fun <- colorRamp2(breaks = variable_breaks.v,
+                            colors = annotation_palette(length(variable_breaks.v)))
+      palettes.l[[variable]] <- col_fun
+    }
   }
   palettes.l
 }
+
+
