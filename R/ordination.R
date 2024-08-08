@@ -59,7 +59,11 @@ make_pca_ggplot <- function(
   ellipse_label_colour = "black",
   ellipse_label_font_type = 1,
   ellipse_border_width = 1, # Width of ellipse border
-  ellipse_alpha = 1, # The transparency of the ellipses
+  # ellipse_alpha = 1, # The transparency of the ellipses
+  ellipse_fill_alpha = 1, # The transparency of the ellipse fill
+  ellipse_outline_alpha = 1, # The transparency of the ellipse outline
+  use_stat_ellipse = T, # Use ggplot stat_ellipse to generate ellipses (Default) or ggforce::geom_mark_ellipse
+  stat_ellipse_level = .95,
 
   plot_spiders = F, # Plot spiders
   spider_variable = NULL,
@@ -129,8 +133,12 @@ make_pca_ggplot <- function(
   species_point_alpha = 1,
   species_point_line_thickness = .1,
   highlight_origin = T, # Highlight the origin line
+  origin_line_colour = "grey40",
+  origin_line_type = 2,
+  origin_line_width = 1,
 
-  component_choices = c(1,2)
+  component_choices = c(1,2),
+  seed = NA # Random seed. Affects various plotting function using random values, e.g. geom_text_repel
 ){
   if(!require("pacman")){
     install.packages("pacman")
@@ -618,8 +626,8 @@ make_pca_ggplot <- function(
   if (highlight_origin == T){
     myplot <-
       myplot +
-      geom_hline(aes(yintercept = 0), colour = "grey40", lty = 2) +
-      geom_vline(aes(xintercept = 0), colour = "grey40", lty = 2)
+      geom_hline(aes(yintercept = 0), colour = origin_line_colour, linetype = origin_line_type, linewidth = origin_line_width) +
+      geom_vline(aes(xintercept = 0), colour = origin_line_colour, linetype = origin_line_type, linewidth = origin_line_width)
   }
 
   if (plot_specie_points == T && !is.null(pca_specie_data.df) && dim(pca_specie_data.df)[1] != 0 ){
@@ -792,6 +800,7 @@ make_pca_ggplot <- function(
 
   # Ellipses
   if (plot_ellipses == T & !is.null(ellipse_variable)){
+
     # useful: https://stackoverflow.com/questions/42799838/follow-up-plotting-ordiellipse-function-from-vegan-package-onto-nmds-plot-creat
     veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100){
       theta <- (0:npoints) * 2 * pi/npoints
@@ -816,14 +825,13 @@ make_pca_ggplot <- function(
       #                                                                                            rslt[[group]]$center,
       #                                                                                            rslt[[group]]$scale))),
       #                                                 Group=group))
-
       ellipse_data.df <- rbind(ellipse_data.df, cbind(as.data.frame(with(df_ord[df_ord[,ellipse_variable] == group,],
                                                                          veganCovEllipse(
                                                                            # cov = cov.wt(cbind(PC1,PC2),
                                                                            #              wt=rep(1/length(PC1),length(PC1))
                                                                            #              )$cov,
                                                                            cov = rslt[[group]]$cov,
-                                                                           center=c(mean(PC1),mean(PC2)),
+                                                                           center=c(mean(get(component_choice_name_1)),mean(get(component_choice_name_2))),
                                                                            # center = rslt[[group]]$center,
                                                                            scale = rslt[[group]]$scale
                                                                          ))),
@@ -848,15 +856,36 @@ make_pca_ggplot <- function(
     names(ellipse_data.df) <- c("x", "y", ellipse_variable)
     colour_variable_colours <- colour_lists[[ellipse_variable]]
 
-    myplot <-
-      myplot +
-      ggnewscale::new_scale_color() +
-      geom_path(data = ellipse_data.df, aes_string(x="x", y="y", colour = ellipse_variable), show.legend = FALSE) +
-      scale_colour_manual(values = ggplot2::alpha(colour_variable_colours, alpha = ellipse_alpha), name = ellipse_alpha)
+    ellipse_outlines.l <- unlist(lapply(colour_lists[ellipse_variable], darken))
+    names(ellipse_outlines.l) <- names(colour_lists[[ellipse_variable]])
+
+    if (use_stat_ellipse == T){
+      myplot <-
+        myplot +
+        ggnewscale::new_scale_color() +
+        geom_path(data = ellipse_data.df, aes_string(x="x", y="y", colour = ellipse_variable),size = ellipse_border_width, show.legend = FALSE) +
+        # scale_colour_manual(values = ggplot2::alpha(colour_variable_colours, alpha = ellipse_alpha), name = ellipse_variable) +
+        scale_colour_manual(values = ggplot2::alpha(ellipse_outlines.l, ellipse_outline_alpha), name = ellipse_variable) +
+        ggnewscale::new_scale_fill() +
+        stat_ellipse(data = ellipse_data.df, aes_string(x="x", y="y", fill = ellipse_variable),geom = "polygon", alpha = ellipse_fill_alpha,level = stat_ellipse_level, show.legend = FALSE) +
+        scale_fill_manual(values = ggplot2::alpha(colour_lists[[ellipse_variable]], ellipse_fill_alpha), name = ellipse_variable)
+    } else{
+      myplot <-
+        myplot +
+        ggnewscale::new_scale_color() +
+        ggnewscale::new_scale_fill() +
+        ggforce::geom_mark_ellipse(aes_string(fill = ellipse_variable,
+                                              color = ellipse_variable), expand = unit(0, 'mm'),
+                                   tol = 0.001,show.legend = F, size = ellipse_border_width, alpha = ellipse_fill_alpha) +
+        scale_colour_manual(values = ggplot2::alpha(ellipse_outlines.l, ellipse_outline_alpha), name = ellipse_variable) +
+        scale_fill_manual(values = ggplot2::alpha(colour_lists[[ellipse_variable]], ellipse_fill_alpha), name = ellipse_variable)
+    }
+
+    # coord_fixed()
     if (label_ellipse == T){
       myplot <-
         myplot +
-        annotate("text",x=ellipse_mean[,2],y=ellipse_mean[,3],label=ellipse_mean$group)
+        annotate("text",x=ellipse_mean[,2],y=ellipse_mean[,3],label=ellipse_mean$group, size = ellipse_label_size, colour = ellipse_label_colour)
     }
   }
 
@@ -916,6 +945,7 @@ make_pca_ggplot <- function(
         #           size = envfit_arrow_label_size, fontface = envfit_arrow_label_font_type,
         #           label = row.names(en_coord_cont)) +
         ggrepel::geom_text_repel(data = en_coord_cont__for_text, aes_string(x = component_choice_name_1, y = component_choice_name_2),#,colour = "black",
+                                 seed = seed,
                                  label = row.names(en_coord_cont),
                                  fontface = envfit_arrow_label_font_type,
                                  colour = envfit_arrow_label_colour,
@@ -952,6 +982,7 @@ make_pca_ggplot <- function(
         #            nudge_x = 0, nudge_y = 0,label.padding = unit(0.1,"lines"))
         ggrepel::geom_label_repel(data = en_coord_cont__for_text, aes_string(x = component_choice_name_1, y = component_choice_name_2),#,colour = "black",
                                   fill = envfit_arrow_label_fill_colour,
+                                  seed = seed,
                                   label = row.names(en_coord_cont),
                                   fontface = envfit_arrow_label_font_type,
                                   colour = envfit_arrow_label_colour,
@@ -1134,6 +1165,7 @@ make_pca_ggplot <- function(
     }
 
   }
+
 
   myplot
 }
