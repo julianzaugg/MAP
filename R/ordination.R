@@ -599,6 +599,14 @@ make_pca_ggplot <- function(
     }
   }
 
+  # Calculate a single contribution value for each species
+  # This is based on how 'factoextra' calculates contribution scores
+  e1 <- eigenvals(pca_object)[component_choices[1]]
+  e2 <- eigenvals(pca_object)[component_choices[2]]
+  top_vars_contributions_1.v <- round(100*scores(pca_object, display = "species", scaling = 0)[,1]^2, 3)[top_vars.v]
+  top_vars_contributions_2.v <- round(100*scores(pca_object, display = "species", scaling = 0)[,2]^2, 3)[top_vars.v]
+  top_vars_contribution_scores.v <- ((top_vars_contributions_1.v + e1) + (top_vars_contributions_2.v + e2))/(e1 + e2)
+
   # Generate specie coordinate dataframe
   if (!is.null(pca_specie_scores)){
     pca_specie_data__unfiltered.df <- m2df(pca_specie_scores, "Species")
