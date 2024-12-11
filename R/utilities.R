@@ -492,7 +492,7 @@ calculate_PC_taxa_contributions <- function(pca_object){
   # Calculate the percentage contribution from each taxa for PC1-3. Requires unscaled values that are squared
   pc1_contribution <- melt(round(100*scores(pca_object, display = "species", scaling = 0)[,1]^2, 3),value.name = "PC1_contribution_percentage")
   pc2_contribution <- melt(round(100*scores(pca_object, display = "species", scaling = 0)[,2]^2, 3),value.name = "PC2_contribution_percentage")
-  pc3_contribution <- melt(round(100*scores(pca_object, display = "species", scaling = 0)[,2]^2, 3),value.name = "PC3_contribution_percentage")
+  pc3_contribution <- melt(round(100*scores(pca_object, display = "species", scaling = 0)[,3]^2, 3),value.name = "PC3_contribution_percentage")
 
   data.frame(pc1_contribution, pc2_contribution, pc3_contribution)
 }
